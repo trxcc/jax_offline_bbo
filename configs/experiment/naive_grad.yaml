@@ -1,0 +1,33 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+
+defaults:
+  - _self_
+  - override /data: default
+  - override /model: mlp
+  - override /task: design_bench
+  - override /logger: wandb # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
+  - override /trainer: default
+  - override /paths: default
+  - override /hydra: default
+  - override /loss: mse
+  - override /search: adam
+
+run_name: Gradient-Ascent
+
+train: true
+
+trainer: 
+  metrics:
+    mse:
+      _target_: src.metric.mse.MSE
+    rank_corr:
+      _target_: src.metric.spearman_correlation.SpearmanCorrelation
+  auprc:
+    _target_: src.metric.auprc.AUPRC
+    max_samples: 10000
+
+wandb_api: 9f59486bed008c431a4a5804c35bb3c065d0b658

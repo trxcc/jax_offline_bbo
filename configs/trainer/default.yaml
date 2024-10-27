@@ -1,0 +1,21 @@
+_target_: src.trainer.base_trainer.Trainer
+
+optimizer: 
+  _target_: optax.adam
+  learning_rate: 0.001
+
+metrics:
+  mse:
+    _target_: src.metric.mse.MSE
+  rank_corr:
+    _target_: src.metric.spearman_correlation.SpearmanCorrelation
+  auprc:
+    _target_: src.metric.auprc.AUPRC
+    max_samples: 10000
+  
+max_epochs: 200
+
+eval_test: true  
+save_best_val_epoch: true 
+save_checkpoint_epochs: 10
+checkpoint_dir: ${paths.output_dir}/checkpoints

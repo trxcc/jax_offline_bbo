@@ -1,0 +1,13 @@
+_target_: src.model.mlp.MLP
+
+hidden_sizes: [2048, 2048]
+output_size: 1
+
+activation: 
+  _target_: flax.linen.leaky_relu
+  _partial_: True
+
+kernel_init: 
+  _target_: jax.nn.initializers.lecun_uniform
+
+bias: True

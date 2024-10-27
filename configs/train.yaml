@@ -1,0 +1,25 @@
+defaults:
+  - _self_
+  - data: default
+  - model: mlp
+  - task: design_bench
+  - logger: wandb # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
+  - trainer: default
+  - paths: default
+  - hydra: default
+  - loss: mse
+  - search: grad
+
+  # experiment configs allow for version control of specific hyperparameters
+  # e.g. best hyperparameters for given model and datamodule
+  - experiment: null
+
+train: true
+
+seed: 1
+
+run_name: debug_1027
+
+
+
+

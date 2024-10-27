@@ -1,0 +1,4 @@
+_target_: src.data.datamodule.JAXDataModule
+
+batch_size: 128
+val_split: 0.2

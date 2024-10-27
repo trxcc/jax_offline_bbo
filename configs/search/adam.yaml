@@ -1,0 +1,11 @@
+_target_: src.search.grad.AdamSearcher
+
+learning_rate: 
+  discrete: 0.1
+  continuous: 0.001
+
+search_steps:
+  discrete: 100
+  continuous: 200
+
+num_solutions: 128

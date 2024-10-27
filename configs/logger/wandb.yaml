@@ -1,0 +1,9 @@
+_target_: src.logger.wandb_logger.WandBLogger
+
+project: JAX-Offline-BBO
+name: ${run_name}
+tags: []
+mode: online
+group: ""
+job_type: "debug"
+dir: ${paths.output_dir}

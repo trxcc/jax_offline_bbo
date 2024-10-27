@@ -26,8 +26,8 @@ trainer:
       _target_: src.metric.mse.MSE
     rank_corr:
       _target_: src.metric.spearman_correlation.SpearmanCorrelation
-  auprc:
-    _target_: src.metric.auprc.AUPRC
-    max_samples: 10000
+    auprc:
+      _target_: src.metric.auprc.AUPRC
+      max_samples: 10000
 
 wandb_api: 9f59486bed008c431a4a5804c35bb3c065d0b658

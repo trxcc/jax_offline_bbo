@@ -121,13 +121,14 @@ class DesignBenchExperimenter(OfflineBBOExperimenter):
         )
     
     def normalize_x(self, x: Union[np.ndarray, jnp.ndarray]) -> Union[np.ndarray, jnp.ndarray]:
+        self._shape0 = x.shape[1:]
         return self.task.normalize_x(x).reshape(x.shape[0], -1)
     
     def normalize_y(self, y: Union[np.ndarray, jnp.ndarray]) -> Union[np.ndarray, jnp.ndarray]:
         return self.task.normalize_y(y)
     
     def denormalize_x(self, x: Union[np.ndarray, jnp.ndarray]) -> Union[np.ndarray, jnp.ndarray]:
-        return self.task.denormalize_x(x).reshape(x.shape[0], *self.input_shape)
+        return self.task.denormalize_x(x.reshape(x.shape[0], *self._shape0))
     
     def denormalize_y(self, y: Union[np.ndarray, jnp.ndarray]) -> Union[np.ndarray, jnp.ndarray]:
         return self.task.denormalize_y(y)

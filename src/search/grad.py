@@ -45,8 +45,6 @@ class GradSearcher(Searcher):
         x_opt = x_init
         for _ in range(self.search_steps):
             x_opt = optimization_step_grad(x_opt)
-            
-            print(self.score_fn(params, x_opt).mean())
 
         return x_opt
 

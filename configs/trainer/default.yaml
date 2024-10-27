@@ -2,7 +2,7 @@ _target_: src.trainer.base_trainer.Trainer
 
 optimizer: 
   _target_: optax.adam
-  learning_rate: 0.001
+  learning_rate: 0.0003
 
 metrics:
   mse:

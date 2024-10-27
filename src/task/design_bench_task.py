@@ -110,15 +110,22 @@ class DesignBenchExperimenter(OfflineBBOExperimenter):
     def problem_statement(self) -> vz.ProblemStatement:
         problem_statement = vz.ProblemStatement()
         root = problem_statement.search_space.root
-        for i in range(self.input_size):
-            root.add_float_param(name=f"x{i}", min_value=float("-inf"), max_value=float("inf")) 
-            
+        
+        if self.task.is_discrete:
+            for i in range(self.input_size):
+                root.add_categorical_param(name=f"x{i}", feasible_values=list(range(self.task.num_classes)))
+                
+        else:
+            for i in range(self.input_size):
+                root.add_float_param(name=f"x{i}", min_value=float("-inf"), max_value=float("inf")) 
+                
         problem_statement.metric_information.extend(
             [
                 vz.MetricInformation(name="Score", goal=vz.ObjectiveMetricGoal.MAXIMIZE),
                 vz.MetricInformation(name="Normalized_Score", goal=vz.ObjectiveMetricGoal.MAXIMIZE),
             ]
         )
+        return problem_statement
     
     def normalize_x(self, x: Union[np.ndarray, jnp.ndarray]) -> Union[np.ndarray, jnp.ndarray]:
         self._shape0 = x.shape[1:]

@@ -38,6 +38,9 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating task <{cfg.task._target_}>")
     task: OfflineBBOExperimenter = hydra.utils.instantiate(cfg.task)
     
+    problem_statement = task.problem_statement()
+    log.info(f"Problem: {problem_statement}")
+    
     x_transforms, y_transforms = [], []
     x_restores, y_restores = [], []
     

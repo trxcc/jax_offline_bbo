@@ -1,7 +1,7 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=dual_grad
+# python train.py experiment=cma_es
 
 
 defaults:
@@ -14,25 +14,16 @@ defaults:
   - override /paths: default
   - override /hydra: default
   - override /loss: nll
-  - override /search: grad
+  - override /search: cma_es
 
-run_name: Gradient-Ascent-Dual-MLP
+run_name: CMA-ES
 
 train: true
 
 trainer: 
   max_epochs: 100 
-
-search:
-  learning_rate: 
-    discrete: 0.01
-    continuous: 0.01
-  
-  search_steps:
-    discrete: 200
-    continuous: 200
-
-  scale_lr: true
+  batch_size: 100
+  learning_rate: 0.001
 
 save_best_val_epoch: false
 

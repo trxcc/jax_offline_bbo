@@ -1,2 +1,2 @@
-# Offline BBO with JAX 
+# Offline BBO with JAX & Hydra
 

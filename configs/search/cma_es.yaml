@@ -1,0 +1,6 @@
+_target_: src.search.cma_es.CMAESSearcher
+
+sigma: 0.5
+max_iterations: 100
+
+num_solutions: 128

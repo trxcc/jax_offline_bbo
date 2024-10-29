@@ -20,6 +20,7 @@ class GradSearcher(Searcher):
         num_solutions: int,
         learning_rate: DictConfig,
         search_steps: DictConfig,
+        scale_lr: bool = False,
     ) -> None:
         super().__init__(score_fn, datamodule, task, num_solutions)
         if task.is_discrete:
@@ -28,14 +29,21 @@ class GradSearcher(Searcher):
         else:
             self.learning_rate = learning_rate["continuous"]
             self.search_steps = search_steps["continuous"]
+            
+        self.scale_lr = scale_lr    
+        
          
-    def run(self, params: Any) -> jnp.ndarray:
+    def run(self) -> jnp.ndarray:
         x_init = self.get_initial_designs(self.datamodule.x, self.datamodule.y, self.num_solutions)
+
+        if self.scale_lr:
+            self.learning_rate = self.learning_rate * \
+                jnp.sqrt(jnp.prod(jnp.array(x_init.shape[1:])))
 
         @jax.jit
         def optimization_step_grad(x):
             def objective(x):
-                return self.score_fn(params, x).sum()  
+                return self.score_fn(x).sum()  
             
             grad_fn = jax.grad(objective)
             grads = grad_fn(x)
@@ -50,17 +58,21 @@ class GradSearcher(Searcher):
 
 class AdamSearcher(GradSearcher):
     
-    def run(self, params: Any) -> jnp.ndarray:
-        self.optimizer = optax.adam(self.learning_rate)
-        
+    def run(self) -> jnp.ndarray:
         x_init = self.get_initial_designs(self.datamodule.x, self.datamodule.y, self.num_solutions)
+
+        if self.scale_lr:
+            self.learning_rate = self.learning_rate * \
+                jnp.sqrt(jnp.prod(jnp.array(x_init.shape[1:])))
+                
+        self.optimizer = optax.adam(self.learning_rate)
         
         opt_state = self.optimizer.init(x_init)
 
         @jax.jit
         def optimization_step_adam(opt_state, x):
             def objective(x):
-                return -self.score_fn(params, x).sum()  # 负号是因为我们要最大化
+                return -self.score_fn(x).sum() 
             
             grad_fn = jax.grad(objective)
             grads = grad_fn(x)

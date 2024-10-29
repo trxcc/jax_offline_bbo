@@ -206,7 +206,7 @@ class Trainer:
         )
 
     @partial(jax.jit, static_argnames=['self']) 
-    def train_step(self, state: train_state.TrainState, batch: Tuple) -> Tuple[train_state.TrainState, float]:
+    def train_step(self, state: train_state.TrainState, batch: Tuple) -> Tuple[train_state.TrainState, float, float]:
         """Single train step"""
         x, y = batch
         
@@ -221,7 +221,7 @@ class Trainer:
         return state, loss, preds
 
     @partial(jax.jit, static_argnames=['self']) 
-    def validate_step(self, state: train_state.TrainState, batch: Tuple) -> float:
+    def eval_step(self, state: train_state.TrainState, batch: Tuple) -> Tuple[train_state.TrainState, float, float]:
         """Single eval step"""
         x, y = batch
         preds = state.apply_fn(state.params, x)
@@ -260,7 +260,7 @@ class Trainer:
         batch_losses = []
         
         for x_batch, y_batch in zip(x_batches, y_batches):
-            state, loss, preds = self.validate_step(state, (x_batch, y_batch))
+            state, loss, preds = self.eval_step(state, (x_batch, y_batch))
             batch_losses.append(loss)
             self._update_metrics(preds, y_batch)
             self.global_step += 1
@@ -283,8 +283,7 @@ class Trainer:
         all_preds = []
         
         for x_batch, y_batch in zip(x_batches, y_batches):
-            preds = state.apply_fn(state.params, x_batch)
-            loss = self.loss_fn(preds, y_batch)
+            state, loss, preds = self.eval_step(state, (x_batch, y_batch))
             batch_losses.append(loss)
             self._update_metrics(preds, y_batch)
             all_preds.append(preds)
@@ -400,7 +399,65 @@ class Trainer:
             params=self.load_checkpoint('best_model.ckpt')
         )
         return self.state
+    
+    def load_last_model(self) -> None:
+        """Load the final model"""
+        self.state = self.state.replace(
+            params=self.load_checkpoint('last_model.ckpt')
+        )
+        return self.state
+    
+    def load_model(self) -> None:
+        if self.save_best_val_epoch:
+            self.state = self.load_best_model()
+        else:
+            self.state = self.load_last_model()
+        return self.state
 
     def get_history(self) -> Dict[str, float]:
         """Return history"""
         return self.history
+    
+
+class DualMLPTrainer(Trainer):
+    
+    def __init__(
+        self,
+        loss_fn: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray],
+        *args, 
+        **kwargs,
+    ) -> None:
+        return super(DualMLPTrainer, self).__init__(loss_fn=loss_fn, *args, **kwargs)
+    
+    @partial(jax.jit, static_argnames=['self'])
+    def train_step(self, state: train_state.TrainState, batch: Tuple) -> Tuple[train_state.TrainState, float]:
+        x, y = batch 
+        
+        def loss_fn(params):
+            mean, std = state.apply_fn(params, x)
+            loss = self.loss_fn(mean, std, y)
+            return jnp.mean(loss), mean 
+        
+        (loss, mean), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
+        state = state.apply_gradients(grads=grads)
+        
+        return state, loss, mean 
+    
+    @partial(jax.jit, static_argnames=['self'])
+    def eval_step(self, state: train_state.TrainState, batch: Tuple) -> float:
+        x, y = batch 
+        mean, std = state.apply_fn(state.params, x)
+        loss = jnp.mean(self.loss_fn(mean, std, y))
+        return state, loss, mean 
+    
+    
+    
+    def predict(self, x: jnp.ndarray, params: Optional[Any] = None) -> jnp.ndarray:
+        """Predict using the model"""
+        if params is None:
+            if self.save_best_val_epoch and self.best_params is not None:
+                params = self.best_params
+            else:
+                params = self.state.params
+        mean, _ = self.state.apply_fn(params, x)
+        return mean 

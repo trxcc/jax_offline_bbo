@@ -32,14 +32,14 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     :param cfg: A DictConfig configuration composed by Hydra.
     :return: A tuple with metrics and dict with all instantiated objects.
     """
-    # set seed for random number generators in pytorch, numpy and python.random
+    
     if cfg.get("seed"):
         key: KeyArray = seed_everything(cfg.seed)
     log.info(f"Instantiating task <{cfg.task._target_}>")
     task: OfflineBBOExperimenter = hydra.utils.instantiate(cfg.task)
     
-    problem_statement = task.problem_statement()
-    log.info(f"Problem: {problem_statement}")
+    # problem_statement = task.problem_statement()
+    # log.info(f"Problem: {problem_statement}")
     
     x_transforms, y_transforms = [], []
     x_restores, y_restores = [], []
@@ -91,14 +91,6 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         rng=key,
         logger=logger,
     )
-    
-    log.info(f"Instantiating searcher <{cfg.search._target_}>")
-    searcher: Searcher = hydra.utils.instantiate(
-        cfg.search, 
-        score_fn=model.apply,
-        datamodule=datamodule,
-        task=task
-    )
 
     object_dict = {
         "cfg": cfg,
@@ -108,16 +100,25 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         "loss_fn": loss_fn,
         "logger": logger,
         "trainer": trainer,
-        "searcher": searcher,
     }
 
     if cfg.get("train"):
         log.info("Starting training!")
         trainer.fit(model=model, input_shape=(datamodule.batch_size, *datamodule.input_shape))
 
-    best_model = trainer.load_best_model()
+    
+    best_model = trainer.load_model()
     metric_dict= trainer.get_history()
-    x_res = searcher.run(params=best_model.params)
+    
+    log.info(f"Instantiating searcher <{cfg.search._target_}>")
+    searcher: Searcher = hydra.utils.instantiate(
+        cfg.search, 
+        score_fn=lambda x: trainer.predict(x, params=best_model.params),
+        datamodule=datamodule,
+        task=task
+    )
+    object_dict["searcher"] = searcher
+    x_res = searcher.run()
     
     x_res, _ = datamodule.restore_data(x=x_res)
     

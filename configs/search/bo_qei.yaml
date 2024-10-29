@@ -1,0 +1,13 @@
+_target_: src.search.bo_qei.BOqEISearcher
+
+noise_se: 0.1
+gp_samples: 500
+batch_size: 32
+num_restarts: 10
+raw_samples: 128
+batch_limit: 5
+maxiter: 200
+iterations: 10
+mc_samples: 128
+
+num_solutions: 128

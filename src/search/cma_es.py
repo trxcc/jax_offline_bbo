@@ -3,7 +3,6 @@ from typing import Callable, Any
 import cma
 import jax 
 import jax.numpy as jnp 
-from omegaconf import DictConfig
 
 from src.data.datamodule import JAXDataModule
 from src.task.base_task import OfflineBBOExperimenter

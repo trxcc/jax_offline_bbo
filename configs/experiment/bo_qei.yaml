@@ -1,7 +1,7 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=cma_es
+# python train.py experiment=bo_qei
 
 
 defaults:
@@ -14,9 +14,9 @@ defaults:
   - override /paths: default
   - override /hydra: default
   - override /loss: nll
-  - override /search: cma_es
+  - override /search: bo_qei
 
-run_name: CMA-ES
+run_name: BO-qEI
 
 train: true
 

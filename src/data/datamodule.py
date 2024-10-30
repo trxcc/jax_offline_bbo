@@ -1,7 +1,7 @@
 import numpy as np
 import jax 
 import jax.numpy as jnp
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Callable, Optional, Sequence, Tuple, Union, Type
 
 from src.utils.utils import train_val_split
 from src._typing import PRNGKeyArray as KeyArray
@@ -107,6 +107,11 @@ class JAXDataModule:
     def input_shape(self) -> Tuple[int]:
         assert self.train_data is not None, "please set up date module first"
         return tuple(self.train_data[0].shape[1:])
+    
+    @property
+    def input_dtype(self) -> Type:
+        assert self.train_data is not None, "please set up date module first"
+        return self.train_data[0].dtype
     
     @property
     def x(self) -> jnp.ndarray:

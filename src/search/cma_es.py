@@ -8,6 +8,7 @@ from src.data.datamodule import JAXDataModule
 from src.task.base_task import OfflineBBOExperimenter
 from src.search.base_searcher import Searcher
 from src.utils.logger import RankedLogger
+from src._typing import PRNGKeyArray as KeyArray
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
@@ -15,6 +16,7 @@ class CMAESSearcher(Searcher):
     
     def __init__(
         self, 
+        key: KeyArray,
         score_fn: Callable[[Any, jnp.ndarray], jnp.ndarray],
         datamodule: JAXDataModule,
         task: OfflineBBOExperimenter,
@@ -22,7 +24,7 @@ class CMAESSearcher(Searcher):
         sigma: float, 
         max_iterations: int
     ) -> None:
-        super().__init__(score_fn, datamodule, task, num_solutions)
+        super().__init__(key, score_fn, datamodule, task, num_solutions)
         self.sigma = sigma 
         self.max_iterations = max_iterations
         

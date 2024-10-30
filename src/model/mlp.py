@@ -1,15 +1,19 @@
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple, Sequence
 
 import flax.linen as nn 
 import jax 
 import jax.numpy as jnp 
 
+from src.task.base_task import OfflineBBOExperimenter
+
 class MLP(nn.Module):
     """MLP module."""
     
-    input_size: int
-    hidden_sizes: Tuple[int, ...]
+    task: OfflineBBOExperimenter
+    hidden_sizes: Sequence[int]
     output_size: int
+    if_embedding: bool = False 
+    embedding_size: int = 50
     activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
     kernel_init: Callable[..., Any] = jax.nn.initializers.lecun_uniform()
     bias: bool = True
@@ -17,8 +21,17 @@ class MLP(nn.Module):
     final_kernel_init: Optional[Callable[..., Any]] = None
     
     @nn.compact
-    def __call__(self, obs: jnp.ndarray) -> jnp.ndarray:
-        hidden = obs
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        if self.task.is_discrete:
+            x = nn.Embed(
+                num_embeddings=self.task.num_classes,
+                features=self.embedding_size,
+            )(x)
+        
+        x = x.reshape((x.shape[0], -1))
+        
+        # Shared layers
+        hidden = x
         
         # Hidden layers
         for hidden_size in self.hidden_sizes:
@@ -43,9 +56,12 @@ class MLP(nn.Module):
         return hidden
     
 class DualHeadMLP(nn.Module):
-    input_size: int
-    hidden_sizes: Tuple[int, ...]
+    
+    task: OfflineBBOExperimenter
+    hidden_sizes: Sequence[int]
     output_size: int = 1
+    if_embedding: bool = False 
+    embedding_size: int = 50
     activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
     kernel_init: Callable[..., Any] = jax.nn.initializers.lecun_uniform()
     bias: bool = True
@@ -56,9 +72,17 @@ class DualHeadMLP(nn.Module):
     std_activation: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None
 
     @nn.compact
-    def __call__(self, obs: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def __call__(self, x: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        if self.task.is_discrete:
+            x = nn.Embed(
+                num_embeddings=self.task.num_classes,
+                features=self.embedding_size,
+            )(x)
+        
+        x = x.reshape((x.shape[0], -1))
+        
         # Shared layers
-        hidden = obs
+        hidden = x
         for hidden_size in self.hidden_sizes:
             hidden = nn.Dense(
                 hidden_size,

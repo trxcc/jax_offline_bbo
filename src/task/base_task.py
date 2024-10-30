@@ -73,6 +73,10 @@ class OfflineBBOExperimenter(Experimenter):
     def input_size(self) -> int:
         return np.prod(self.x_np.shape[1:]).item()
     
+    @property
+    def num_classes(self) -> Optional[int]:
+        return None
+    
     @abc.abstractmethod
     def normalize_x(
         self, 

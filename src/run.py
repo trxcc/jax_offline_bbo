@@ -3,6 +3,7 @@ from typing import Optional, Tuple, Any, Dict, List, Callable
 import hydra
 import rootutils
 import wandb 
+import jax 
 import jax.numpy as jnp
 import flax.linen as nn 
 from omegaconf import OmegaConf, DictConfig
@@ -35,6 +36,9 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     
     if cfg.get("seed"):
         key: KeyArray = seed_everything(cfg.seed)
+    else:
+        key: KeyArray = seed_everything(0)
+    
     log.info(f"Instantiating task <{cfg.task._target_}>")
     task: OfflineBBOExperimenter = hydra.utils.instantiate(cfg.task)
     
@@ -56,6 +60,8 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         x_transforms.append(task.normalize_x)
         x_restores.insert(0, task.denormalize_x)
 
+    key, data_key, trainer_key, searcher_key = jax.random.split(key, num=4)
+
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: JAXDataModule = hydra.utils.instantiate(
         config=cfg.data,
@@ -70,11 +76,11 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         y=task.y,
         x_test=task.x_ood,
         y_test=task.y_ood,
-        random_key=key
+        random_key=data_key,
     )
 
     log.info(f"Instantiating model <{cfg.model._target_}>")
-    model: nn.Module = hydra.utils.instantiate(cfg.model, input_size=datamodule.input_size)
+    model: nn.Module = hydra.utils.instantiate(cfg.model, task=task)
 
     log.info(f"Instantiating logger <{cfg.logger._target_}>")
     logger: BaseLogger = hydra.utils.instantiate(cfg.logger)
@@ -88,7 +94,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         loss_fn=loss_fn,
         data_module=datamodule,
         seed=cfg.seed,
-        rng=key,
+        rng=trainer_key,
         logger=logger,
     )
 
@@ -105,14 +111,14 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if cfg.get("train"):
         log.info("Starting training!")
         trainer.fit(model=model, input_shape=(datamodule.batch_size, *datamodule.input_shape))
-
     
     best_model = trainer.load_model()
-    metric_dict= trainer.get_history()
+    metric_dict = trainer.get_history()
     
     log.info(f"Instantiating searcher <{cfg.search._target_}>")
     searcher: Searcher = hydra.utils.instantiate(
         cfg.search, 
+        key=searcher_key,
         score_fn=lambda x: trainer.predict(x, params=best_model.params),
         datamodule=datamodule,
         task=task

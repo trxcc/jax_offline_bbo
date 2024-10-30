@@ -1,0 +1,15 @@
+_target_: src.search.reinforce.ReinforceSearcher
+
+learning_rate: 
+  discrete: 0.1
+  continuous: 0.01
+
+exploration_std: 0.1
+iterations: 200
+
+batch_size: 
+  discrete: 256
+  continuous: 2048
+
+num_solutions: 128
+

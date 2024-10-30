@@ -9,7 +9,7 @@ import os
 import orbax.checkpoint
 from pathlib import Path
 import flax.linen as nn 
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union, Type
 from flax.training import train_state
 import time
 from tqdm.auto import tqdm
@@ -196,9 +196,17 @@ class Trainer:
             raise FileNotFoundError(f"Checkpoint not found at {load_path}")
         return self.checkpointer.restore(load_path)
 
-    def create_train_state(self, rng: KeyArray, input_shape: Tuple) -> train_state.TrainState:
+    def create_train_state(
+        self, 
+        rng: KeyArray, 
+        input_shape: Tuple,
+        dtype: Union[Type[jnp.int32], Type[jnp.int64], Type[jnp.float32], Type[jnp.float64]] = jnp.float32,
+    ) -> train_state.TrainState:
         """Initial model params and optimizer state"""
-        params = self.model.init(rng, jnp.ones(input_shape))
+        if dtype not in [jnp.int32, jnp.int64, jnp.float32, jnp.float64]:
+            raise ValueError("dtype must be either jnp.int, jnp.float, or jnp.double")
+            
+        params = self.model.init(rng, jnp.ones(input_shape, dtype=dtype))
         return train_state.TrainState.create(
             apply_fn=self.model.apply,
             params=params,
@@ -302,7 +310,7 @@ class Trainer:
         
         init_rng, train_rng = jax.random.split(self.rng)
         epoch_rng = jax.random.split(train_rng, self.max_epochs)
-        self.state = self.create_train_state(init_rng, input_shape)
+        self.state = self.create_train_state(init_rng, input_shape, self.data_module.input_dtype)
         
         for epoch in tqdm(range(self.max_epochs), desc="Training"):
             self.current_epoch = epoch

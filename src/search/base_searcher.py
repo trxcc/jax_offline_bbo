@@ -7,19 +7,21 @@ import jax.numpy as jnp
 
 from src.task.base_task import OfflineBBOExperimenter
 from src.data.datamodule import JAXDataModule
+from src._typing import PRNGKeyArray as KeyArray
 
 class Searcher:
     def __init__(
         self, 
+        key: KeyArray,
         score_fn: Callable,
         datamodule: JAXDataModule,
         task: OfflineBBOExperimenter,
         num_solutions: int,
     ):
+        self.key = key
         self.score_fn = score_fn
         self.datamodule = datamodule
         self.task = task 
-        
         self.num_solutions = num_solutions
     
     @staticmethod

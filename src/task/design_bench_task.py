@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Sequence, Union, Tuple
+from typing import Callable, Dict, Sequence, Union, Tuple, Optional
 
 import design_bench as db 
 import numpy as np 
@@ -106,6 +106,12 @@ class DesignBenchExperimenter(OfflineBBOExperimenter):
             require_normalize_xs=require_normalize_xs,
             require_normalize_ys=require_normalize_ys,
         )
+        
+    @property
+    def num_classes(self) -> Optional[int]:
+        if self.task.is_discrete:
+            return self.task.num_classes
+        return None
     
     def problem_statement(self) -> vz.ProblemStatement:
         problem_statement = vz.ProblemStatement()

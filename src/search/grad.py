@@ -10,10 +10,12 @@ from tqdm import tqdm
 from src.data.datamodule import JAXDataModule
 from src.task.base_task import OfflineBBOExperimenter
 from src.search.base_searcher import Searcher
+from src._typing import PRNGKeyArray as KeyArray
 
 class GradSearcher(Searcher):
     def __init__(
         self, 
+        key: KeyArray,
         score_fn: Callable[[Any, jnp.ndarray], jnp.ndarray], 
         datamodule: JAXDataModule, 
         task: OfflineBBOExperimenter, 
@@ -22,7 +24,7 @@ class GradSearcher(Searcher):
         search_steps: DictConfig,
         scale_lr: bool = False,
     ) -> None:
-        super().__init__(score_fn, datamodule, task, num_solutions)
+        super().__init__(key, score_fn, datamodule, task, num_solutions)
         if task.is_discrete:
             self.learning_rate = learning_rate["discrete"]
             self.search_steps = search_steps["discrete"]

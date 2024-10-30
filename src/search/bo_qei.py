@@ -21,6 +21,7 @@ from src.data.datamodule import JAXDataModule
 from src.task.base_task import OfflineBBOExperimenter
 from src.search.base_searcher import Searcher
 from src.utils.logger import RankedLogger
+from src._typing import PRNGKeyArray as KeyArray
 
 warnings.filterwarnings('ignore', category=BadInitialCandidatesWarning)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -31,6 +32,7 @@ class BOqEISearcher(Searcher):
     
     def __init__(
         self,
+        key: KeyArray,
         score_fn: Callable[[jnp.ndarray], jnp.ndarray],
         datamodule: JAXDataModule,
         task: OfflineBBOExperimenter,
@@ -45,7 +47,7 @@ class BOqEISearcher(Searcher):
         mc_samples: int,
         gp_samples: int,
     ) -> None:
-        super().__init__(score_fn, datamodule, task, num_solutions)
+        super().__init__(key, score_fn, datamodule, task, num_solutions)
         self.noise_se = noise_se 
         self.batch_size = batch_size
         self.num_restarts = num_restarts

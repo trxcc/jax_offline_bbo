@@ -19,7 +19,10 @@ from src.metric.base_metric import Metric
 from src.metric.mse import MSE
 from src.logger.base_logger import BaseLogger, MultiLogger
 from src.logger.wandb_logger import WandBLogger
+from src.utils.logger import RankedLogger
 from src._typing import PRNGKeyArray as KeyArray
+
+log = RankedLogger(__name__, rank_zero_only=True)
 
 class Trainer:
     def __init__(
@@ -35,6 +38,7 @@ class Trainer:
         eval_test: bool = True,
         save_best_val_epoch: bool = True,
         save_checkpoint_epochs: int = 10,
+        save_prefix: str = "",
         checkpoint_dir: Union[str, os.PathLike] = './checkpoints',
         logger: Optional[Union[BaseLogger, list[BaseLogger]]] = None,
     ):
@@ -49,6 +53,8 @@ class Trainer:
         self.eval_test = eval_test
         self.save_best_val_epoch = save_best_val_epoch
         
+
+        self.save_prefix = f"{save_prefix}-" if save_prefix else ""
         self.save_checkpoint_epochs = save_checkpoint_epochs
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -340,12 +346,12 @@ class Trainer:
             # save best model
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
-                self.best_params = self.state.params.copy() if self.save_best_val_epoch else None
-            
-                self.save_checkpoint(self.best_params, 'best_model.ckpt')
+                if self.save_best_val_epoch:
+                    self.best_params = self.state.params.copy()
+                    self.save_checkpoint(self.best_params, f'{self.save_prefix}best_model.ckpt')
             
             if (epoch + 1) % self.save_checkpoint_epochs == 0:
-                self.save_checkpoint(self.state.params, f'epoch_{epoch+1}.ckpt')
+                self.save_checkpoint(self.state.params, f'{self.save_prefix}epoch_{epoch+1}.ckpt')
             
             # log
             metrics_to_log = {k: v[-1] for k, v in self.history.items() if v != []}
@@ -355,7 +361,7 @@ class Trainer:
             # print(f"train_loss: {train_loss:.4f} - val_loss: {val_loss:.4f}")
             # print(f"time: {epoch_time:.2f}s")
             
-        self.save_checkpoint(self.state.params, 'last_model.ckpt')
+        self.save_checkpoint(self.state.params, f'{self.save_prefix}last_model.ckpt')
         
         if self.eval_test:
             self.rng, test_rng = jax.random.split(self.rng)
@@ -375,10 +381,10 @@ class Trainer:
                 **{f'test_{k}': v for k, v in test_metrics.items()}
             }
             self.logger.log_metrics(test_results)
-            print("\nTest Results:")
-            print(f"test_loss: {test_loss:.4f}")
+            log.info("\nTest Results:")
+            log.info(f"test_loss: {test_loss:.4f}")
             for metric_name, value in test_metrics.items():
-                print(f"test_{metric_name}: {value:.4f}")
+                log.info(f"test_{metric_name}: {value:.4f}")
         
         self.on_fit_end()
 
@@ -393,7 +399,7 @@ class Trainer:
     
     def save_history(self) -> None:
         """save history"""
-        history_path = self.checkpoint_dir / 'training_history.json'
+        history_path = self.checkpoint_dir / f'{self.save_prefix}training_history.json'
         history_dict = {k: [float(v) for v in vals] for k, vals in self.history.items()}
         history_dict['best_epoch'] = self.best_epoch
         history_dict['best_val_loss'] = float(self.best_val_loss)
@@ -404,14 +410,14 @@ class Trainer:
     def load_best_model(self) -> None:
         """Load the best model"""
         self.state = self.state.replace(
-            params=self.load_checkpoint('best_model.ckpt')
+            params=self.load_checkpoint(f'{self.save_prefix}best_model.ckpt')
         )
         return self.state
     
     def load_last_model(self) -> None:
         """Load the final model"""
         self.state = self.state.replace(
-            params=self.load_checkpoint('last_model.ckpt')
+            params=self.load_checkpoint(f'{self.save_prefix}last_model.ckpt')
         )
         return self.state
     
@@ -457,7 +463,6 @@ class DualMLPTrainer(Trainer):
         mean, std = state.apply_fn(state.params, x)
         loss = jnp.mean(self.loss_fn(mean, std, y))
         return state, loss, mean 
-    
     
     
     def predict(self, x: jnp.ndarray, params: Optional[Any] = None) -> jnp.ndarray:

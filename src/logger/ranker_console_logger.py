@@ -12,27 +12,29 @@ from src.utils.logger import RankedLogger
 
 
 class RankedConsoleLogger(BaseLogger):
-    """支持多GPU的控制台日志记录器"""
+    """Console Logger"""
     
     def __init__(
         self,
         exp_name: str = None,
         rank_zero_only: bool = True,
-        log_level: int = logging.INFO
+        log_level: int = logging.INFO,
+        log_prefix: str = ""
     ):
         self.exp_name = exp_name or datetime.now().strftime("%Y%m%d_%H%M%S")
         self.start_time = time.time()
         self.step_times = []
         self._last_step_time = self.start_time
+        self.log_prefix = log_prefix
         
-        # 设置ranked logger
+        # Set up ranked logger
         self.logger = RankedLogger(
             name=f"experiment_{self.exp_name}",
             rank_zero_only=rank_zero_only
         )
         self.logger.setLevel(log_level)
         
-        # 设置控制台处理器
+        # Set up console
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
         formatter = logging.Formatter(
@@ -41,6 +43,9 @@ class RankedConsoleLogger(BaseLogger):
         )
         console_handler.setFormatter(formatter)
         self.logger.logger.addHandler(console_handler)
+        
+    def set_prefix(self, prefix: str = ""):
+        self.log_prefix = prefix
         
     def _format_time(self, seconds: float) -> str:
         hours = int(seconds // 3600)
@@ -53,6 +58,11 @@ class RankedConsoleLogger(BaseLogger):
             return f"{name}: {value:.4f}"
         return f"{name}: {value}"
     
+    def _add_prefix(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.log_prefix:
+            return metrics
+        return {f"{self.log_prefix}/{k}": v for k, v in metrics.items()}
+    
     def log_metrics(self, metrics: Dict[str, float], step: Optional[int] = None):
         current_time = time.time()
         elapsed = current_time - self.start_time
@@ -61,7 +71,9 @@ class RankedConsoleLogger(BaseLogger):
         
         avg_step_time = np.mean(self.step_times[-100:])
         
-        # 构建日志消息
+        # Add prefix to metrics
+        metrics = self._add_prefix(metrics)
+        
         step_str = f"Step {step}" if step is not None else ""
         time_str = f"[{self._format_time(elapsed)}]"
         metrics_str = " | ".join(self._format_metric(k, v) for k, v in metrics.items())
@@ -73,6 +85,9 @@ class RankedConsoleLogger(BaseLogger):
         self._last_step_time = current_time
     
     def log_hyperparams(self, params: Dict[str, Any]):
+        # Add prefix to hyperparameters
+        params = self._add_prefix(params)
+        
         self.logger.log(logging.INFO, "\nHyperparameters:")
         for k, v in params.items():
             self.logger.log(logging.INFO, f"{k}: {v}")

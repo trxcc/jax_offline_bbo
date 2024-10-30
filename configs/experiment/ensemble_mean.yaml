@@ -1,0 +1,43 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=ensemble_mean
+
+
+defaults:
+  - _self_
+  - override /data: default
+  - override /model: dual_mlp
+  - override /task: design_bench
+  - override /logger: wandb # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
+  - override /trainer: ensemble
+  - override /paths: default
+  - override /hydra: default
+  - override /loss: nll
+  - override /search: grad
+
+run_name: Gradient-Ascent-Mean-Ensemble
+
+train: true
+
+trainer:
+  num_ensemble: 5
+  max_epochs: 100
+  ensemble_type: mean
+  save_best_val_epoch: false
+  base_trainer:
+    _target_: src.trainer.base_trainer.DualMLPTrainer
+    _partial_: true 
+
+search:
+  learning_rate: 
+    discrete: 0.01
+    continuous: 0.01
+  
+  search_steps:
+    discrete: 200
+    continuous: 200
+
+  scale_lr: true
+
+wandb_api: 9f59486bed008c431a4a5804c35bb3c065d0b658

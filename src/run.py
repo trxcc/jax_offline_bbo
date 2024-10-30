@@ -21,7 +21,6 @@ from src._typing import PRNGKeyArray as KeyArray
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
-
 @task_wrapper
 def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Trains the model. Can additionally evaluate on a testset, using best weights obtained during
@@ -37,7 +36,9 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if cfg.get("seed"):
         key: KeyArray = seed_everything(cfg.seed)
     else:
-        key: KeyArray = seed_everything(0)
+        import random
+        cfg.seed = random.randint(0, 1e-6)
+        key: KeyArray = seed_everything(cfg.seed)
     
     log.info(f"Instantiating task <{cfg.task._target_}>")
     task: OfflineBBOExperimenter = hydra.utils.instantiate(cfg.task)
@@ -116,13 +117,22 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     metric_dict = trainer.get_history()
     
     log.info(f"Instantiating searcher <{cfg.search._target_}>")
-    searcher: Searcher = hydra.utils.instantiate(
-        cfg.search, 
-        key=searcher_key,
-        score_fn=lambda x: trainer.predict(x, params=best_model.params),
-        datamodule=datamodule,
-        task=task
-    )
+    if isinstance(best_model, list):
+        searcher: Searcher = hydra.utils.instantiate(
+            cfg.search, 
+            key=searcher_key,
+            score_fn=lambda x: trainer.predict(x, params=[model0.params for model0 in best_model]),
+            datamodule=datamodule,
+            task=task
+        )
+    else:
+        searcher: Searcher = hydra.utils.instantiate(
+            cfg.search, 
+            key=searcher_key,
+            score_fn=lambda x: trainer.predict(x, params=best_model.params),
+            datamodule=datamodule,
+            task=task
+        )
     object_dict["searcher"] = searcher
     x_res = searcher.run()
     

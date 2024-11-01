@@ -89,7 +89,7 @@ class EnsembleTrainer(Trainer):
                     param = trainer.best_params
                 else:
                     param = trainer.state.params
-            predictions.append(trainer.state.apply_fn(param, x))
+            predictions.append(trainer.predict(x, param))
         
         predictions = jnp.array(predictions)
         if self.ensemble_type == "mean":

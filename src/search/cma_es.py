@@ -31,9 +31,9 @@ class CMAESSearcher(Searcher):
     def run(self) -> jnp.ndarray:
         x_init = self.get_initial_designs(self.datamodule.x, self.datamodule.y, self.num_solutions)
         
-        @jax.jit
+        # @jax.jit
         def objective(x):
-            return self.score_fn(x)
+            return self.score_fn(x.reshape(1, -1))
         
         x = x_init
         result = [] 

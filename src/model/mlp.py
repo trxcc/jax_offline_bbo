@@ -22,7 +22,7 @@ class MLP(nn.Module):
     
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-        if self.task.is_discrete:
+        if self.if_embedding and self.task.is_discrete:
             x = nn.Embed(
                 num_embeddings=self.task.num_classes,
                 features=self.embedding_size,
@@ -73,7 +73,7 @@ class DualHeadMLP(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        if self.task.is_discrete:
+        if self.if_embedding and self.task.is_discrete:
             x = nn.Embed(
                 num_embeddings=self.task.num_classes,
                 features=self.embedding_size,

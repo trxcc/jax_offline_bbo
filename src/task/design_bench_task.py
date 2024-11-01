@@ -1,7 +1,9 @@
 from typing import Callable, Dict, Sequence, Union, Tuple, Optional
 
 import design_bench as db 
+from jax.numpy import ndarray
 import numpy as np 
+import jax 
 import jax.numpy as jnp 
 
 from design_bench.task import Task
@@ -151,3 +153,14 @@ class DesignBenchExperimenter(OfflineBBOExperimenter):
     
     def to_integers(self, x: Union[np.ndarray, jnp.ndarray]) -> Union[np.ndarray, jnp.ndarray]:
         return self.task.to_integers(x)
+
+
+class MINsExperimenter(DesignBenchExperimenter):
+    def to_logits(self, x: Union[np.ndarray, jnp.ndarray], temp: float = 1e-5) -> Union[np.ndarray, jnp.ndarray]:
+        x = self.task.to_logits(x)  
+        pad_width = [(0, 0)] * (len(x.shape) - 1) + [(1, 0)]
+        x = jnp.pad(x, pad_width)
+        return jax.nn.softmax(x / temp)
+    
+    def to_integers(self, x: Union[np.ndarray, jnp.ndarray]) -> Union[np.ndarray, jnp.ndarray]:
+        return jnp.argmax(x, axis=-1, dtype=jnp.int32)

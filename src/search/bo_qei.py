@@ -106,6 +106,7 @@ class BOqEISearcher(Searcher):
         
         @jax.jit
         def objective(x):
+            # print(x.shape, self.score_fn(x).shape)
             return self.score_fn(x)
         
         def optimize_acqf_and_get_observation(acq_func):

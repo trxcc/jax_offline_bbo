@@ -10,7 +10,7 @@ defaults:
   - override /model: dual_mlp
   - override /task: design_bench
   - override /logger: wandb # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
-  - override /trainer: dual_mlp
+  - override /trainer: ensemble
   - override /paths: default
   - override /hydra: default
   - override /loss: nll
@@ -20,14 +20,20 @@ run_name: BO-qEI
 
 train: true
 
+model:
+  hidden_sizes: [256]
+
 data:
   batch_size: 100
 
 trainer: 
+  num_ensemble: 5
   max_epochs: 100 
   optimizer:
     learning_rate: 0.001
-
-save_best_val_epoch: false
+  base_trainer:
+    _target_: src.trainer.base_trainer.DualMLPTrainer
+    _partial_: true 
+  save_best_val_epoch: false
 
 wandb_api: 9f59486bed008c431a4a5804c35bb3c065d0b658

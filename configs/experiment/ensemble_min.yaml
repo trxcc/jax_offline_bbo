@@ -16,7 +16,7 @@ defaults:
   - override /loss: nll
   - override /search: grad
 
-run_name: Gradient-Ascent-Mean-Ensemble
+run_name: Gradient-Ascent-Min-Ensemble
 
 train: true
 

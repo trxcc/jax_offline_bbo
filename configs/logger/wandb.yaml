@@ -1,7 +1,7 @@
 _target_: src.logger.wandb_logger.WandBLogger
 
 project: JAX-Offline-BBO
-name: ${run_name}
+name: ${run_name}-${task.task_name}
 tags: []
 mode: online
 group: ""

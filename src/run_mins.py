@@ -14,7 +14,7 @@ from src.utils.logger import RankedLogger
 from src.utils.utils import task_wrapper, seed_everything, get_metric_value, obtain_percentile_score
 from src.data.datamodule import JAXDataModule
 from src.logger.base_logger import BaseLogger
-from src.trainer.base_trainer import Trainer
+from src.trainer.mlp_trainer import Trainer
 from src.search.base_searcher import Searcher
 from src.task.base_task import OfflineBBOExperimenter
 from src._typing import PRNGKeyArray as KeyArray
@@ -116,25 +116,8 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     best_model = trainer.load_model()
     metric_dict = trainer.get_history()
     
-    log.info(f"Instantiating searcher <{cfg.search._target_}>")
-    if isinstance(best_model, list):
-        searcher: Searcher = hydra.utils.instantiate(
-            cfg.search, 
-            key=searcher_key,
-            score_fn=lambda x: trainer.predict(x, params=[model0.params for model0 in best_model]),
-            datamodule=datamodule,
-            task=task
-        )
-    else:
-        searcher: Searcher = hydra.utils.instantiate(
-            cfg.search, 
-            key=searcher_key,
-            score_fn=lambda x: trainer.predict(x, params=best_model.params),
-            datamodule=datamodule,
-            task=task
-        )
-    object_dict["searcher"] = searcher
-    x_res = searcher.run()
+    log.info(f"Instantiating explore GAN trainer <{cfg.explore_gan._target_}>")
+    
     
     x_res, _ = datamodule.restore_data(x=x_res)
     

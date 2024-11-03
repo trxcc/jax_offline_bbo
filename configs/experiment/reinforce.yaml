@@ -34,7 +34,7 @@ trainer:
   optimizer:
     learning_rate: 0.001
   base_trainer:
-    _target_: src.trainer.base_trainer.DualMLPTrainer
+    _target_: src.trainer.mlp_trainer.DualMLPTrainer
     _partial_: true 
 
 model:

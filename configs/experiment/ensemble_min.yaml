@@ -22,12 +22,13 @@ train: true
 
 trainer:
   num_ensemble: 5
-  max_epochs: 100
   ensemble_type: min
-  save_best_val_epoch: false
   base_trainer:
-    _target_: src.trainer.base_trainer.DualMLPTrainer
+    _target_: src.trainer.mlp_trainer.DualMLPTrainer
     _partial_: true 
+  trainer_kwargs: 
+    max_epochs: 100
+    save_best_val_epoch: false
 
 search:
   learning_rate: 

@@ -3,6 +3,7 @@ from typing import Any, Callable, Dict, Optional, Union, Type, List, Tuple
 from functools import partial
 from copy import deepcopy
 import flax.linen as nn 
+from flax.training.train_state import TrainState
 import jax 
 import jax.numpy as jnp 
 import optax 
@@ -25,44 +26,44 @@ class EnsembleTrainer(Trainer):
         self,
         # model: nn.Module,
         num_ensemble: int,
-        base_trainer: Type[Trainer],
-        loss_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-        optimizer: optax.GradientTransformation,
         data_module: JAXDataModule,
+        base_trainer: Type[Trainer],
+        trainer_kwargs: dict,
         ensemble_type: str = "mean",
         metrics: Optional[Dict[str, Metric]] = None,
-        max_epochs: int = 100,
         seed: int = 0,
         rng: KeyArray = jax.random.PRNGKey(0),
-        eval_test: bool = True,
-        save_best_val_epoch: bool = True,
-        save_checkpoint_epochs: int = 10,
         save_prefix: str = "",
         checkpoint_dir: Union[str, os.PathLike] = './checkpoints',
         logger: Optional[Union[BaseLogger, list[BaseLogger]]] = None,
     ):
         self.ensemble_type = ensemble_type
         self.num_ensemble = num_ensemble
-        self.key = rng
-        self.save_prefix = f"{save_prefix}-" if save_prefix else ""
+        
+        super(EnsembleTrainer, self).__init__(
+            data_module=data_module,
+            metrics=metrics,
+            seed=seed,
+            rng=rng,
+            save_prefix=save_prefix,
+            checkpoint_dir=checkpoint_dir,
+            logger=logger
+        )
         
         self.trainers: List[Trainer] = []
         for i in range(num_ensemble):
-            self.key, trainer_key = jax.random.split(self.key)
-            trainer = base_trainer(
-                loss_fn=loss_fn,
-                optimizer=optimizer,
+            self.rng, trainer_key = jax.random.split(self.rng)
+            trainer_kwargs.update(dict(
                 data_module=data_module,
                 metrics=deepcopy(metrics),
-                max_epochs=max_epochs,
                 seed=seed,
                 rng=trainer_key,
-                eval_test=eval_test,
-                save_best_val_epoch=save_best_val_epoch,
-                save_checkpoint_epochs=save_checkpoint_epochs,
                 save_prefix=f"{self.save_prefix}model_{i}",
                 checkpoint_dir=checkpoint_dir,
-                logger=deepcopy(logger)
+                logger=deepcopy(logger),
+            ))
+            trainer = base_trainer(
+                **trainer_kwargs
             )
             trainer.logger.set_prefix(f"model_{i}")
             self.trainers.append(trainer)
@@ -125,4 +126,8 @@ class EnsembleTrainer(Trainer):
                 histories[f"model_{i}-{k}"] = v     
         return histories
             
-            
+    def train_step(self, state: TrainState, batch: Tuple) -> Tuple[TrainState, float]:
+        pass 
+    
+    def eval_step(self, state: TrainState, batch: Tuple) -> Tuple[TrainState, float]:
+        pass

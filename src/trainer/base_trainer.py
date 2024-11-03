@@ -1,5 +1,6 @@
 from copy import deepcopy
 from functools import partial
+import abc 
 import jax
 import jax.numpy as jnp
 import json
@@ -24,38 +25,22 @@ from src._typing import PRNGKeyArray as KeyArray
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
-class Trainer:
+class Trainer(abc.ABC):
     def __init__(
         self,
-        # model: nn.Module,
-        loss_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-        optimizer: optax.GradientTransformation,
         data_module: JAXDataModule,
         metrics: Optional[Dict[str, Metric]] = None,
-        max_epochs: int = 100,
         seed: int = 0,
         rng: KeyArray = jax.random.PRNGKey(0),
-        eval_test: bool = True,
-        save_best_val_epoch: bool = True,
-        save_checkpoint_epochs: int = 10,
         save_prefix: str = "",
         checkpoint_dir: Union[str, os.PathLike] = './checkpoints',
         logger: Optional[Union[BaseLogger, list[BaseLogger]]] = None,
     ):
-        # self.model = model
-        self.loss_fn = loss_fn
-        self.optimizer = optimizer
         self.data_module = data_module
-        self.max_epochs = max_epochs
-        
         self.seed = seed
         self.rng = rng
-        self.eval_test = eval_test
-        self.save_best_val_epoch = save_best_val_epoch
-        
 
         self.save_prefix = f"{save_prefix}-" if save_prefix else ""
-        self.save_checkpoint_epochs = save_checkpoint_epochs
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.checkpointer = orbax.checkpoint.PyTreeCheckpointer()
@@ -66,19 +51,6 @@ class Trainer:
             self.logger = MultiLogger(logger)
         else:
             self.logger = logger
-        
-        self.logger.log_hyperparams({
-            'max_epochs': max_epochs,
-            'seed': seed,
-            'eval_test': eval_test,
-            'save_best_val_epoch': save_best_val_epoch,
-        })
-        
-        self.state = None
-        self.best_val_loss = float('inf')
-        self.best_params = None
-        self.best_epoch = -1
-        
         self.metrics = metrics or {"mse": MSE()}
         
         self.history = {
@@ -89,14 +61,7 @@ class Trainer:
         for metric_name in self.metrics:
             self.history[f'train_{metric_name}'] = []
             self.history[f'val_{metric_name}'] = []
-            
-        if eval_test:
-            self.history['test_loss'] = []
-            for metric_name in metrics:
-                self.history[f'test_{metric_name}'] = []
-        
-        self.current_epoch = 0
-        self.global_step = 0
+
 
     def _reset_metrics(self):
         """Reset all metrics"""
@@ -219,28 +184,15 @@ class Trainer:
             tx=self.optimizer,
         )
 
-    @partial(jax.jit, static_argnames=['self']) 
+    @abc.abstractmethod
     def train_step(self, state: train_state.TrainState, batch: Tuple) -> Tuple[train_state.TrainState, float, float]:
         """Single train step"""
-        x, y = batch
-        
-        def loss_fn(params):
-            preds = state.apply_fn(params, x)
-            loss = self.loss_fn(preds, y)
-            return jnp.mean(loss), preds
+        pass
 
-        (loss, preds), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
-        state = state.apply_gradients(grads=grads)
-        
-        return state, loss, preds
-
-    @partial(jax.jit, static_argnames=['self']) 
+    @abc.abstractmethod
     def eval_step(self, state: train_state.TrainState, batch: Tuple) -> Tuple[train_state.TrainState, float, float]:
         """Single eval step"""
-        x, y = batch
-        preds = state.apply_fn(state.params, x)
-        loss = jnp.mean(self.loss_fn(preds, y))
-        return state, loss, preds
+        pass
 
     def train_epoch(self, state: train_state.TrainState, rng: KeyArray)\
         -> Tuple[train_state.TrainState, float, Dict[str, float]]:
@@ -407,21 +359,21 @@ class Trainer:
         with open(history_path, 'w') as f:
             json.dump(history_dict, f, indent=4)
             
-    def load_best_model(self) -> None:
+    def load_best_model(self):
         """Load the best model"""
         self.state = self.state.replace(
             params=self.load_checkpoint(f'{self.save_prefix}best_model.ckpt')
         )
         return self.state
     
-    def load_last_model(self) -> None:
+    def load_last_model(self):
         """Load the final model"""
         self.state = self.state.replace(
             params=self.load_checkpoint(f'{self.save_prefix}last_model.ckpt')
         )
         return self.state
     
-    def load_model(self) -> None:
+    def load_model(self):
         if self.save_best_val_epoch:
             self.state = self.load_best_model()
         else:
@@ -431,46 +383,3 @@ class Trainer:
     def get_history(self) -> Dict[str, float]:
         """Return history"""
         return self.history
-    
-
-class DualMLPTrainer(Trainer):
-    
-    def __init__(
-        self,
-        loss_fn: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray],
-        *args, 
-        **kwargs,
-    ) -> None:
-        return super(DualMLPTrainer, self).__init__(loss_fn=loss_fn, *args, **kwargs)
-    
-    @partial(jax.jit, static_argnames=['self'])
-    def train_step(self, state: train_state.TrainState, batch: Tuple) -> Tuple[train_state.TrainState, float]:
-        x, y = batch 
-        
-        def loss_fn(params):
-            mean, std = state.apply_fn(params, x)
-            loss = self.loss_fn(mean, std, y)
-            return jnp.mean(loss), mean 
-        
-        (loss, mean), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
-        state = state.apply_gradients(grads=grads)
-        
-        return state, loss, mean 
-    
-    @partial(jax.jit, static_argnames=['self'])
-    def eval_step(self, state: train_state.TrainState, batch: Tuple) -> float:
-        x, y = batch 
-        mean, std = state.apply_fn(state.params, x)
-        loss = jnp.mean(self.loss_fn(mean, std, y))
-        return state, loss, mean 
-    
-    
-    def predict(self, x: jnp.ndarray, params: Optional[Any] = None) -> jnp.ndarray:
-        """Predict using the model"""
-        if params is None:
-            if self.save_best_val_epoch and self.best_params is not None:
-                params = self.best_params
-            else:
-                params = self.state.params
-        mean, _ = self.state.apply_fn(params, x)
-        return mean 

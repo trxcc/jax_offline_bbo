@@ -14,7 +14,7 @@ from src.utils.logger import RankedLogger
 from src.utils.utils import task_wrapper, seed_everything, get_metric_value, obtain_percentile_score
 from src.data.datamodule import JAXDataModule
 from src.logger.base_logger import BaseLogger
-from src.trainer.base_trainer import Trainer
+from src.trainer.mlp_trainer import Trainer
 from src.search.base_searcher import Searcher
 from src.task.base_task import OfflineBBOExperimenter
 from src._typing import PRNGKeyArray as KeyArray
@@ -90,14 +90,28 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     loss_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] = hydra.utils.instantiate(cfg.loss)
 
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
-    trainer: Trainer = hydra.utils.instantiate(
-        config=cfg.trainer, 
-        loss_fn=loss_fn,
-        data_module=datamodule,
-        seed=cfg.seed,
-        rng=trainer_key,
-        logger=logger,
-    )
+    # TODO: A more flexible framework to handle trainer_kwargs
+    if cfg.trainer.get("num_ensemble", 1) > 1:
+        trainer_kwargs = {k: v for k, v in cfg.trainer.trainer_kwargs.items() if k != '_target_'}
+        trainer_kwargs["loss_fn"] = loss_fn
+        trainer: Trainer = hydra.utils.instantiate(
+            config=cfg.trainer, 
+            data_module=datamodule,
+            seed=cfg.seed,
+            rng=trainer_key,
+            logger=logger,
+            trainer_kwargs=trainer_kwargs,
+        )
+    
+    else:
+        trainer: Trainer = hydra.utils.instantiate(
+            config=cfg.trainer, 
+            loss_fn=loss_fn,
+            data_module=datamodule,
+            seed=cfg.seed,
+            rng=trainer_key,
+            logger=logger,
+        )
 
     object_dict = {
         "cfg": cfg,
@@ -134,6 +148,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
             task=task
         )
     object_dict["searcher"] = searcher
+    log.info("Start searching for the final design candidates!")
     x_res = searcher.run()
     
     x_res, _ = datamodule.restore_data(x=x_res)

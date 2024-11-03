@@ -1,4 +1,4 @@
-_target_: src.trainer.base_trainer.Trainer
+_target_: src.trainer.mlp_trainer.MLPTrainer
 
 optimizer: 
   _target_: optax.adam

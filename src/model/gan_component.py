@@ -335,7 +335,6 @@ class ContinuousGenerator(nn.Module):
     def setup(self):
         self.embed_0 = nn.Dense(self.hidden)
         
-        # 主干网络层
         self.dense_0 = nn.Dense(self.hidden)
         self.ln_0 = nn.LayerNorm()
         

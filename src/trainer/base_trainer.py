@@ -185,12 +185,12 @@ class Trainer(abc.ABC):
         )
 
     @abc.abstractmethod
-    def train_step(self, state: train_state.TrainState, batch: Tuple) -> Tuple[train_state.TrainState, float, float]:
+    def train_step(self, state: train_state.TrainState, batch: Tuple[jnp.ndarray, jnp.ndarray]) -> Tuple[train_state.TrainState, float, float]:
         """Single train step"""
         pass
 
     @abc.abstractmethod
-    def eval_step(self, state: train_state.TrainState, batch: Tuple) -> Tuple[train_state.TrainState, float, float]:
+    def eval_step(self, state: train_state.TrainState, batch: Tuple[jnp.ndarray, jnp.ndarray]) -> Tuple[train_state.TrainState, float, float]:
         """Single eval step"""
         pass
 
@@ -266,7 +266,7 @@ class Trainer(abc.ABC):
         self.model = model
         self.on_fit_start()
         
-        init_rng, train_rng = jax.random.split(self.rng)
+        self.rng, init_rng, train_rng = jax.random.split(self.rng, 3)
         epoch_rng = jax.random.split(train_rng, self.max_epochs)
         self.state = self.create_train_state(init_rng, input_shape, self.data_module.input_dtype)
         

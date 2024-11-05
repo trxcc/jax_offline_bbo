@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+from functools import partial
 from flax import linen as nn
 from typing import Sequence, Tuple, Any 
 import numpy as np
@@ -157,6 +158,7 @@ class ConvDiscriminator(nn.Module):
         grads = grads.reshape((grads.shape[0], -1))
         return (1.0 - jnp.linalg.norm(grads, axis=-1, keepdims=True)) ** 2
 
+    
     def loss(self, x, y, labels):
         preds = self.apply({'params': self.params}, x, y)
         

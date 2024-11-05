@@ -20,29 +20,9 @@ from src._typing import PRNGKeyArray as KeyArray
 from src.trainer.mlp_trainer import Trainer
 from src.trainer.ensemble_trainer import EnsembleTrainer
 from src.utils.logger import RankedLogger
+from src.trainer.utils.noise import cont_noise, disc_noise
 
 log = RankedLogger(__name__, rank_zero_only=True)
-
-@jax.jit
-def disc_noise(
-    x: jnp.ndarray, 
-    key: KeyArray, 
-    keep: float = 0.9, 
-    temp: float = 5.0
-) -> jnp.ndarray:
-    p = jnp.ones_like(x)
-    p = p / jnp.sum(p, axis=-1, keepdims=True)
-    p = keep * x + (1.0 - keep) * p
-    gumbel_noise = gumbel(key, p.shape)
-    return jax.nn.softmax((jnp.log(p) + gumbel_noise) / temp, axis=-1)
-
-@jax.jit 
-def cont_noise(
-    x: jnp.ndarray, 
-    key: KeyArray, 
-    noise_std: float
-) -> jnp.ndarray:
-    return x + noise_std * normal(key, x.shape)
 
 def override_train_epoch(original_method):
     def wrapper(self, state: TrainState, rng: KeyArray):

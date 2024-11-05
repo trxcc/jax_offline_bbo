@@ -147,6 +147,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
             datamodule=datamodule,
             task=task
         )
+        
     object_dict["searcher"] = searcher
     log.info("Start searching for the final design candidates!")
     x_res = searcher.run()

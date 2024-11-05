@@ -1,0 +1,7 @@
+_target_: src.task.design_bench_task.MINsExperimenter
+
+task_name: AntMorphology-Exact-v0
+
+require_to_logits: True
+require_normalize_xs: True
+require_normalize_ys: True

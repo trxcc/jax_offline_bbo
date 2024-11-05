@@ -17,6 +17,15 @@ from src.logger.base_logger import BaseLogger
 from src.trainer.mlp_trainer import Trainer
 from src.search.base_searcher import Searcher
 from src.task.base_task import OfflineBBOExperimenter
+from src.model.gan_component import (
+    Discriminator,
+    ConvDiscriminator,
+    DiscreteGenerator,
+    DiscreteConvGenerator,
+    ContinuousGenerator,
+    ContinuousConvGenerator
+)
+
 from src._typing import PRNGKeyArray as KeyArray
 
 log = RankedLogger(__name__, rank_zero_only=True)
@@ -112,6 +121,19 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if cfg.get("train"):
         log.info("Starting training!")
         trainer.fit(model=model, input_shape=(datamodule.batch_size, *datamodule.input_shape))
+    
+    disc_class = Discriminator
+    dgen_class = DiscreteGenerator
+    cgen_class = ContinuousGenerator
+    
+    if cfg.get('use_conv', False):
+        disc_class = ConvDiscriminator
+        dgen_class = DiscreteConvGenerator
+        cgen_class = ContinuousConvGenerator
+        
+    
+    
+    assert 0
     
     best_model = trainer.load_model()
     metric_dict = trainer.get_history()

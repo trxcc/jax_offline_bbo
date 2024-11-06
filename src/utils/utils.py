@@ -26,6 +26,7 @@ def train_val_split(
     x: jnp.ndarray,
     y: jnp.ndarray,
     val_size: float = 0.2, 
+    w: Optional[jnp.ndarray] = None,
     key: Optional[KeyArray] = None,
 ) -> Tuple[Tuple[jnp.ndarray], Tuple[jnp.ndarray]]: 
     
@@ -37,7 +38,10 @@ def train_val_split(
     
     train_idx, val_idx = idx[:split_idx], idx[split_idx:]
     
-    return x[train_idx], y[train_idx], x[val_idx], y[val_idx]
+    if w is not None:
+        return x[train_idx], y[train_idx], x[val_idx], y[val_idx], w[train_idx]
+    else:
+        return x[train_idx], y[train_idx], x[val_idx], y[val_idx]
 
 def task_wrapper(task_func: Callable) -> Callable:
     """Optional decorator that controls the failure behavior when executing the task function.

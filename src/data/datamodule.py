@@ -75,6 +75,7 @@ class JAXDataModule:
         y: Union[np.ndarray, jnp.ndarray],
         x_test: Optional[Union[np.ndarray, jnp.ndarray]] = None,
         y_test: Optional[Union[np.ndarray, jnp.ndarray]] = None,
+        w: Optional[Union[np.ndarray, jnp.ndarray]] = None,
         random_key: Optional[KeyArray] = None,
     ):
         self.eval_test = x_test is not None and y_test is not None 
@@ -85,14 +86,23 @@ class JAXDataModule:
         
         self._x, self._y = x, y 
         self._x_test, self._y_test = x_test, y_test
+        self.has_w = w is not None 
         
-        x_train, y_train, x_val, y_val = train_val_split(
-            x, y,
-            val_size=self.val_split,
-            key=random_key
-        )
+        if w is not None:
+            x_train, y_train, x_val, y_val, w_train = train_val_split(
+                x, y, w=w,
+                val_size=self.val_split,
+                key=random_key
+            )
+        else:
+            x_train, y_train, x_val, y_val = train_val_split(
+                x, y,
+                val_size=self.val_split,
+                key=random_key
+            )
         
-        self.train_data = (jnp.array(x_train), jnp.array(y_train))
+        self.train_data = (jnp.array(x_train), jnp.array(y_train), jnp.array(w_train)) \
+            if w is not None else (jnp.array(x_train), jnp.array(y_train))
         self.val_data = (jnp.array(x_val), jnp.array(y_val))
         
         if self.eval_test:
@@ -135,8 +145,11 @@ class JAXDataModule:
         assert self.eval_test, "test data is not prepared"
         return self._y
         
-    def get_batch(self, key: KeyArray, data: Tuple[jnp.ndarray]):
-        x, y = data
+    def get_batch(self, key: KeyArray, data: Tuple[jnp.ndarray], is_val: bool = False):
+        if self.has_w and not is_val:
+            x, y, w = data
+        else:
+            x, y = data 
         num_samples = len(x)
         
         shuffled_idx = jax.random.permutation(key, num_samples)
@@ -148,13 +161,17 @@ class JAXDataModule:
         x_batches = x[batch_idx]
         y_batches = y[batch_idx]
         
+        if self.has_w and not is_val:
+            w_batches = w[batch_idx]
+            return x_batches, y_batches, w_batches 
+    
         return x_batches, y_batches
     
     def train_dataloader(self, key: KeyArray):
         return self.get_batch(key, self.train_data)
     
     def val_dataloader(self, key: KeyArray):
-        return self.get_batch(key, self.val_data)
+        return self.get_batch(key, self.val_data, is_val=True)
     
     def test_dataloader(self, key: KeyArray):
-        return self.get_batch(key, self.test_data) if self.eval_test else None 
+        return self.get_batch(key, self.test_data, is_val=True) if self.eval_test else None 

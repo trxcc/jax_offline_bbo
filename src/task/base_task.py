@@ -40,10 +40,14 @@ class OfflineBBOExperimenter(Experimenter):
         self.full_y_min = full_y_min
         self.full_y_max = full_y_max
         
-        self.is_discrete = is_discrete
+        self._is_discrete = is_discrete
         self.require_to_logits = require_to_logits
         self.require_normalize_xs = require_normalize_xs
         self.require_normalize_ys = require_normalize_ys
+    
+    @property
+    def is_discrete(self):
+        return self._is_discrete
     
     @property
     def x(self) -> np.ndarray:

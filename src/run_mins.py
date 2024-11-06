@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Any, Dict, List, Callable
+from typing import Optional, Tuple, Any, Dict, List, Callable, Union
 
 import hydra
 import rootutils
@@ -25,7 +25,10 @@ from src.model.gan_component import (
     ContinuousGenerator,
     ContinuousConvGenerator
 )
-
+from src.trainer.mins.weight_gan_trainer import WeightGANTrainer
+from src.trainer.mins.utils import (
+    get_weights
+)
 from src._typing import PRNGKeyArray as KeyArray
 
 log = RankedLogger(__name__, rank_zero_only=True)
@@ -44,10 +47,11 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     
     if cfg.get("seed"):
         key: KeyArray = seed_everything(cfg.seed)
+        seed = cfg.seed
     else:
         import random
-        cfg.seed = random.randint(0, 1e-6)
-        key: KeyArray = seed_everything(cfg.seed)
+        seed = random.randint(0, 1e-6)
+        key: KeyArray = seed_everything(seed)
     
     log.info(f"Instantiating task <{cfg.task._target_}>")
     task: OfflineBBOExperimenter = hydra.utils.instantiate(cfg.task)
@@ -70,7 +74,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         x_transforms.append(task.normalize_x)
         x_restores.insert(0, task.denormalize_x)
 
-    key, data_key, trainer_key, searcher_key = jax.random.split(key, num=4)
+    key, data_key, trainer_key, gan_data_key = jax.random.split(key, num=4)
 
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: JAXDataModule = hydra.utils.instantiate(
@@ -122,23 +126,81 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         log.info("Starting training!")
         trainer.fit(model=model, input_shape=(datamodule.batch_size, *datamodule.input_shape))
     
-    disc_class = Discriminator
-    dgen_class = DiscreteGenerator
-    cgen_class = ContinuousGenerator
+    log.info(f"Instantiating GAN-datamodule <{cfg.data._target_}>")
+    gan_datamodule: JAXDataModule = hydra.utils.instantiate(
+        config=cfg.gan_data,
+        x_transforms=x_transforms,
+        y_transforms=y_transforms,
+        x_restores=x_restores,
+        y_restores=y_restores,
+    )
+    gan_datamodule.setup(
+        x=task.x,
+        y=task.y,
+        w=get_weights(datamodule.y, base_temp=cfg.get("base_temp", None)),
+        random_key=gan_data_key,
+    )
     
-    if cfg.get('use_conv', False):
-        disc_class = ConvDiscriminator
-        dgen_class = DiscreteConvGenerator
-        cgen_class = ContinuousConvGenerator
+    explore_discriminator: Union[Discriminator, ConvDiscriminator] = hydra.utils.instantiate(
+        cfg.discriminator, design_shape=datamodule.input_shape
+    )
+    
+    if task.is_discrete:
+        explore_generator: Union[DiscreteGenerator, DiscreteConvGenerator] = hydra.utils.instantiate(
+            cfg.discrete_generator, design_shape=datamodule.input_shape
+        )
+    else:
+        explore_generator: Union[ContinuousGenerator, ContinuousConvGenerator] = hydra.utils.instantiate(
+            cfg.continuous_generator, design_shape=datamodule.input_shape
+        )
+    
+    explore_gan: WeightGANTrainer = hydra.utils.instantiate(
+        cfg.gan_trainer,
+        data_module=gan_datamodule,
+        is_discrete=task.is_discrete,
+        seed=seed,
+        rng=key,
+        save_prefix="explore_gan",
+        logger=logger
+    )
+    
+    exploit_discriminator: Union[Discriminator, ConvDiscriminator] = hydra.utils.instantiate(
+        cfg.discriminator, design_shape=datamodule.input_shape
+    )
+    
+    if task.is_discrete:
+        exploit_generator: Union[DiscreteGenerator, DiscreteConvGenerator]= hydra.utils.instantiate(
+            cfg.discrete_generator, design_shape=datamodule.input_shape
+        )
+    else:
+        exploit_generator: Union[ContinuousGenerator, ContinuousConvGenerator] = hydra.utils.instantiate(
+            cfg.continuous_generator, design_shape=datamodule.input_shape
+        )
         
+    exploit_gan: WeightGANTrainer = hydra.utils.instantiate(
+        cfg.gan_trainer,
+        data_module=gan_datamodule,
+        is_discrete=task.is_discrete,
+        seed=seed,
+        rng=key,
+        save_prefix="exploit_gan",
+        logger=logger
+    )
     
+    exploit_gan.fit(
+        exploit_generator, 
+        exploit_discriminator,
+        input_shape=(gan_datamodule.batch_size, *gan_datamodule.input_shape),
+    )
     
-    assert 0
+    condition_ys = jnp.tile(jnp.max(datamodule.y, keepdims=True), (cfg.get("num_solutions", 128), 1))
+    
+    if task.is_discrete:
+        explore_gan.start_temp = explore_gan.final_temp
+        exploit_gan.start_temp = exploit_gan.final_temp
     
     best_model = trainer.load_model()
     metric_dict = trainer.get_history()
-    
-    log.info(f"Instantiating explore GAN trainer <{cfg.explore_gan._target_}>")
     
     
     x_res, _ = datamodule.restore_data(x=x_res)

@@ -17,7 +17,8 @@ defaults:
 
 run_name: MINs
 
-train: true
+train: false 
+num_solutions: 128
 
 use_conv: false 
 
@@ -25,17 +26,53 @@ trainer:
   max_epochs: 100 
   save_best_val_epoch: false
 
-search:
-  learning_rate: 
-    discrete: 0.01
-    continuous: 0.01
-  
-  search_steps:
-    discrete: 200
-    continuous: 200
+hidden_size: 1024
 
-  scale_lr: true
+base_temp: 0.1
 
+gan_data:
+  _target_: src.data.datamodule.JAXDataModule
+  batch_size: 128
+  val_split: 0.2
 
+discriminator:
+  _target_: src.model.gan_component.Discriminator
+  hidden: ${hidden_size}
+  method: wasserstein
+
+discrete_generator: 
+  _target_: src.model.gan_component.DiscreteGenerator
+  latent_size: 32
+  hidden: ${hidden_size}
+
+continuous_generator: 
+  _target_: src.model.gan_component.ContinuousGenerator
+  latent_size: 32
+  hidden: ${hidden_size}
+
+gan_trainer:
+  _target_: src.trainer.mins.weight_gan_trainer.WeightGANTrainer
+  critic_frequency: 10
+  flip_frac: 0.
+  fake_pair_frac: 0.
+  penalty_weight: 10.
+  generator_opt: 
+    _target_: optax.adam
+    learning_rate: 0.0002
+    b1: 0.0
+    b2: 0.9
+  discriminator_opt:
+    _target_: optax.adam
+    learning_rate: 0.0002
+    b1: 0.0
+    b2: 0.9
+  max_epochs: 100
+  noise_std: 0.0
+  keep: 1.0
+  start_temp: 5.0
+  final_temp: 1.0
+  save_prefix: gan
+  save_checkpoint_epochs: 10
+  checkpoint_dir: ${paths.output_dir}/checkpoints
 
 wandb_api: 9f59486bed008c431a4a5804c35bb3c065d0b658

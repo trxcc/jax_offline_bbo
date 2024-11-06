@@ -60,7 +60,7 @@ class Discriminator(nn.Module):
         x = nn.leaky_relu(self.ln_2(x), negative_slope=0.2)
         return self.dense_3(jnp.concatenate([x, y_embed], axis=1))
 
-    def penalty(self, h, y):
+    def penalty(self, h, y, params):
         """Calculate gradient penalty
         
         Args:
@@ -68,12 +68,12 @@ class Discriminator(nn.Module):
             y: scores
         """
         # Calculate gradients
-        grad_fn = jax.grad(lambda h: self.apply({'params': self.variables['params']}, h, y).sum())
+        grad_fn = jax.grad(lambda h: self.apply(params, h, y).sum())
         g = grad_fn(h)
-        g = g.reshape(-1, self.input_size)
+        g = g.reshape(-1, np.prod(self.design_shape))
         return (1.0 - jnp.linalg.norm(g, axis=-1, keepdims=True)) ** 2
 
-    def loss(self, x, y, labels):
+    def loss(self, x, y, labels, params):
         """Calculate discriminator loss
         
         Args:
@@ -84,7 +84,7 @@ class Discriminator(nn.Module):
         Returns:
             Tuple of (predictions, loss, accuracy)
         """
-        pred = self.apply({'params': self.variables['params']}, x, y)
+        pred = self.apply(params, x, y)
         
         if self.method == 'wasserstein':
             loss = jnp.where(labels > 0.5, -pred, pred)
@@ -348,19 +348,18 @@ class ContinuousGenerator(nn.Module):
         
         self.dense_3 = nn.Dense(np.prod(self.design_shape))
     
-    def __call__(self, y, z=None, train: bool = True):
+    def __call__(self, y, z=None, temp=None, train: bool = True):
         
         if z is None:
             key = jax.random.PRNGKey(0)
             z = jax.random.normal(key, shape=(y.shape[0], self.latent_size))
         
-        z = z.astype(jnp.float32)
-        y = y.astype(jnp.float32)
+        z = z.astype(jnp.float32) # shape: (batch_size, latent_size)
+        y = y.astype(jnp.float32) # shape: (batch_size, 1)
         
-        y_embed = self.embed_0(y)
-        
+        y_embed = self.embed_0(y) # shape: (batch_size, hidden)
         def apply_dense_block(x, dense, ln, y_embed):
-            x = jnp.concatenate([x, y_embed], axis=1)
+            x = jnp.concatenate([x, y_embed], axis=1) # shape: (batch_size, latent_size + hidden)
             x = dense(x)
             x = ln(x)
             return nn.leaky_relu(x, negative_slope=0.2)
@@ -424,7 +423,7 @@ class ContinuousConvGenerator(nn.Module):
             padding='SAME'
         )
     
-    def __call__(self, y, z=None, train: bool = True):
+    def __call__(self, y, z=None, temp=None, train: bool = True):
         
         if z is None:
             key = jax.random.PRNGKey(0)

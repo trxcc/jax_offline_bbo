@@ -20,7 +20,7 @@ from src._typing import PRNGKeyArray as KeyArray
 from src.trainer.mlp_trainer import Trainer
 from src.trainer.ensemble_trainer import EnsembleTrainer
 from src.utils.logger import RankedLogger
-from src.trainer.utils.noise import cont_noise, disc_noise
+from src.trainer.mins.utils import cont_noise, disc_noise
 
 log = RankedLogger(__name__, rank_zero_only=True)
 

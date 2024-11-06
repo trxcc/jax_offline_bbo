@@ -1,8 +1,8 @@
-tasks="AntMorphology-Exact-v0 DKittyMorphology-Exact-v0 Superconductor-RandomForest-v0 TFBind8-Exact-v0 TFBind10-Exact-v0"
-experiments="bo_qei cma_es reinforce gradient_ascent ensemble_min ensemble_mean"
+tasks="AntMorphology-Exact-v0"
+experiments="gradient_ascent"
 
-MAX_JOBS=4
-AVAILABLE_GPUS="0"
+MAX_JOBS=8
+AVAILABLE_GPUS="0 1 2 3"
 MAX_RETRIES=0
 
 get_gpu_allocation() {
@@ -52,7 +52,7 @@ for task in $tasks; do
             check_jobs
             gpu_allocation=$(get_gpu_allocation $job_number)
             ((job_number++))
-            run_with_retry "src/run_default.py \
+            run_with_retry "src/run_forward.py \
                 experiment=${expt} \
                 ++task.task_name=${task} \
                 ++seed=${seed}

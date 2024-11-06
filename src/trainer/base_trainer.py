@@ -203,7 +203,7 @@ class Trainer(abc.ABC):
         x_batches, y_batches = self.data_module.train_dataloader(rng)
         batch_losses = []
         
-        for x_batch, y_batch in zip(x_batches, y_batches):
+        for x_batch, y_batch, w_batch in zip(x_batches, y_batches):
             state, loss, preds = self.train_step(state, (x_batch, y_batch))
             batch_losses.append(loss)
             self._update_metrics(preds, y_batch)

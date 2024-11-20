@@ -112,6 +112,56 @@ class WeightGANTrainer(Trainer):
         
         return {"generator": g_state, "discriminator": d_state}
     
+    @partial(jax.jit, static_argnames=['self']) 
+    def compute_fake_loss(self, d_params, g_params, y_real, rng):
+        rng, z_key = jax.random.split(rng)
+        z = jax.random.normal(z_key, (y_real.shape[0], self.generator.latent_size))
+        x_fake = self.generator.apply(
+            g_params,
+            y_real, z, temp=self.temp, train=False,
+        )
+        p_fake, d_fake, acc_fake = self.discriminator.loss(
+            x_fake, y_real, 
+            jnp.zeros((y_real.shape[0], 1)), 
+            params=d_params
+        )
+        return x_fake, p_fake, d_fake, acc_fake, rng
+    
+    @partial(jax.jit, static_argnames=['self'])
+    def compute_pair_loss(self, d_params, y_real, x_real, rng):
+        rng, shuffle_key = jax.random.split(rng)
+        x_pair = jax.random.shuffle(shuffle_key, x_real)
+
+        p_pair, d_pair, acc_pair = self.discriminator.loss(
+            x_pair, y_real,
+            jnp.zeros((y_real.shape[0], 1)),
+            params=d_params
+        )
+        return x_pair, p_pair, d_pair, acc_pair, rng
+    
+    @partial(jax.jit, static_argnames=['self'])
+    def compute_real_loss(self, d_params, y_real, x_real, rng):
+        rng, tmp_key = jax.random.split(rng)
+        labels = (self.flip_frac <= \
+            jax.random.uniform(tmp_key, shape=(y_real.shape[0], 1))).astype(jnp.float32)
+        p_real, d_real, acc_real = self.discriminator.loss(
+            x_real, y_real,
+            labels, params=d_params 
+        )
+        return p_real, d_real, acc_real, rng
+        
+    @partial(jax.jit, static_argnames=['self'])
+    def compute_penalty(self, x_fake, x_real, y_real, d_params, rng):
+        rng, gp_key = jax.random.split(rng)
+        e = jax.random.uniform(gp_key, shape=[y_real.shape[0]] + [1] * (len(x_fake.shape) - 1))
+        x_interp = x_real * e + x_fake * (1 - e)
+        penalty = self.discriminator.penalty(x_interp, y_real, params=d_params)
+        return penalty, rng
+    
+    @partial(jax.jit, static_argnames=['self'])
+    def compute_total_loss(self, w, d_real, d_fake, penalty):
+        return jnp.mean(w * (d_real + d_fake + self.penalty_weight * penalty))
+    
     
     def train_step(
         self, 
@@ -135,16 +185,10 @@ class WeightGANTrainer(Trainer):
         d_state = state["discriminator"]
         
         def discriminator_loss_fn(d_params, rng):
-            rng, z_key = jax.random.split(rng)
-            z = jax.random.normal(z_key, (batch_size, self.generator.latent_size))
-            x_fake = self.generator.apply(
-                g_state.params,
-                y_real, z, temp=self.temp, train=False,
-            )
-            p_fake, d_fake, acc_fake = self.discriminator.loss(
-                x_fake, y_real, 
-                jnp.zeros((batch_size, 1)), 
-                params=d_params
+            (
+                x_fake, p_fake, d_fake, acc_fake, rng
+            ) = self.compute_fake_loss(
+                d_params, g_state.params, y_real, rng
             )
             
             metrics['generator/train/y_real'] = jnp.mean(y_real)
@@ -160,13 +204,10 @@ class WeightGANTrainer(Trainer):
             
             if self.fake_pair_frac > 0:
                 
-                rng, shuffle_key = jax.random.split(rng)
-                x_pair = jax.random.shuffle(shuffle_key, x_real)
-            
-                p_pair, d_pair, acc_pair = self.discriminator.loss(
-                    x_pair, y_real,
-                    jnp.zeros((batch_size, 1)),
-                    params=d_params
+                (
+                    x_pair, p_pair, d_pair, acc_pair, rng
+                ) = self.compute_pair_loss(
+                    d_params, y_real, x_real, rng
                 )
                 
                 d_fake = d_pair * self.fake_pair_frac + d_fake 
@@ -175,27 +216,22 @@ class WeightGANTrainer(Trainer):
             metrics['discriminator/train/d_pair'] = jnp.mean(d_pair)
             metrics['discriminator/train/acc_pair'] = jnp.mean(acc_pair)
             
-            rng, tmp_key = jax.random.split(rng)
-            labels = (self.flip_frac <= \
-                jax.random.uniform(tmp_key, shape=(batch_size, 1))).astype(jnp.float32)
-            p_real, d_real, acc_real = self.discriminator.loss(
-                x_real, y_real,
-                labels, params=d_params 
+            (
+                p_real, d_real, acc_real, rng
+            ) = self.compute_real_loss(
+                d_params, y_real, x_real, rng
             )
             
             metrics['discriminator/train/p_real'] = jnp.mean(p_real)
             metrics['discriminator/train/d_real'] = jnp.mean(d_real)
             metrics['discriminator/train/acc_real'] = jnp.mean(acc_real)
             
-            rng, gp_key = jax.random.split(rng)
-            e = jax.random.uniform(gp_key, shape=[batch_size] + [1] * (len(x_fake.shape) - 1))
-            x_interp = x_real * e + x_fake * (1 - e)
-            penalty = self.discriminator.penalty(x_interp, y_real, params=d_params)
+            penalty, rng = self.compute_penalty(x_fake, x_real, y_real, d_params, rng)
             
             metrics['discriminator/train/neg_critic_loss'] = jnp.mean(-(d_real + d_fake))
             metrics['discriminator/train/penalty'] = jnp.mean(penalty)
             
-            total_loss = jnp.mean(w * (d_real + d_fake + self.penalty_weight * penalty))
+            total_loss = self.compute_total_loss(w, d_real, d_fake, penalty)
             return total_loss
         
         total_loss, d_grads = jax.value_and_grad(
@@ -205,10 +241,10 @@ class WeightGANTrainer(Trainer):
         
        # Update generator 
         def update_generator(rng):
-            rng, gen_key = jax.random.split(rng)
-            z = jax.random.normal(gen_key, (batch_size, self.generator.latent_size))
             
-            def g_loss_fn(g_params):
+            @jax.jit
+            def g_loss_fn(g_params, loss_rng):
+                z = jax.random.normal(loss_rng, (batch_size, self.generator.latent_size))
                 x_fake = self.generator.apply(
                     g_params,
                     y_real, z, temp=self.temp, train=True
@@ -220,8 +256,8 @@ class WeightGANTrainer(Trainer):
                 )
                 loss = w * d_fake 
                 return loss.mean()
-                
-            g_grads = jax.grad(g_loss_fn)(g_state.params)
+             
+            g_grads = jax.grad(lambda x: g_loss_fn(x, loss_rng=rng))(g_state.params)
             return g_state.apply_gradients(grads=g_grads)
 
         # Conditionally update generator based on iteration count
@@ -255,18 +291,10 @@ class WeightGANTrainer(Trainer):
         g_state = state["generator"]
         d_state = state["discriminator"]
         
-        rng, z_key = jax.random.split(rng)
+        x_fake, p_fake, d_fake, acc_fake, rng = self.compute_fake_loss(
+            d_state.params, g_state.params, y_real, rng
+        )
         
-        z = jax.random.normal(z_key, (batch_size, self.generator.latent_size))
-        x_fake = self.generator.apply(
-            g_state.params, 
-            y_real, z, temp=self.temp, train=False,
-        )
-        p_fake, d_fake, acc_fake = self.discriminator.loss(
-            x_fake, y_real, 
-            jnp.zeros((batch_size, 1)), 
-            params=d_state.params
-        )
         metrics[f'generator/validate/y_real'] = jnp.mean(y_real)
         metrics[f'discriminator/validate/p_fake'] = jnp.mean(p_fake)
         metrics[f'discriminator/validate/d_fake'] = jnp.mean(d_fake)
@@ -278,29 +306,26 @@ class WeightGANTrainer(Trainer):
         
         if self.fake_pair_frac > 0:
             
-            rng, shuffle_key = jax.random.split(rng)
-            x_pair = jax.random.shuffle(shuffle_key, x_real)
-        
-            p_pair, d_pair, acc_pair = self.discriminator.loss(
-                x_pair, y_real,
-                jnp.ones((batch_size, 1)),
-                params=d_state.params
+            x_pair, p_pair, d_pair, acc_pair, rng = self.compute_pair_loss(
+                d_state.params, y_real, x_real, rng
             )
             
         metrics['discriminator/validate/p_pair'] = jnp.mean(p_pair)
         metrics['discriminator/validate/d_pair'] = jnp.mean(d_pair)
         metrics['discriminator/validate/acc_pair'] = jnp.mean(acc_pair)
         
-        p_real, d_real, acc_real = self.discriminator.loss(
-            x_real, y_real, 
-            jnp.ones((batch_size, 1)),
-            params=d_state.params
-        )
+        @jax.jit
+        def compute_d_real(x_real, y_real, d_params):
+            p_real, d_real, acc_real = self.discriminator.loss(
+                x_real, y_real, 
+                jnp.ones((y_real.shape[0], 1)),
+                params=d_params
+            )
+            return d_real
         
-        rng, gp_key = jax.random.split(rng)
-        e = jax.random.uniform(gp_key, shape=[batch_size] + [1] * (len(x_fake.shape) - 1))
-        x_interp = x_real * e + x_fake * (1 - e)
-        penalty = self.discriminator.penalty(x_interp, y_real, params=d_state.params)
+        d_real = compute_d_real(x_real, y_real, d_state.params)
+        
+        penalty, rng = self.compute_penalty(x_fake, x_real, y_real, d_state.params, rng)
         
         metrics['discriminator/validate/neg_critic_loss'] = jnp.mean(-(d_real + d_fake))
         metrics['discriminator/validate/penalty'] = jnp.mean(penalty)

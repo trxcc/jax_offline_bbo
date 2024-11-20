@@ -37,7 +37,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         key: KeyArray = seed_everything(cfg.seed)
     else:
         import random
-        cfg.seed = random.randint(0, 1e-6)
+        cfg.seed = random.randint(0, 1e6)
         key: KeyArray = seed_everything(cfg.seed)
     
     log.info(f"Instantiating task <{cfg.task._target_}>")

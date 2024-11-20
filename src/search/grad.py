@@ -1,4 +1,4 @@
-from typing import Callable, Any
+from typing import Callable, Any, Union
 
 import numpy as np 
 import jax 
@@ -20,18 +20,27 @@ class GradSearcher(Searcher):
         datamodule: JAXDataModule, 
         task: OfflineBBOExperimenter, 
         num_solutions: int,
-        learning_rate: DictConfig,
-        search_steps: DictConfig,
+        learning_rate: Union[DictConfig, float],
+        search_steps: Union[DictConfig, float],
         scale_lr: bool = False,
     ) -> None:
         super().__init__(key, score_fn, datamodule, task, num_solutions)
-        if task.is_discrete:
-            self.learning_rate = learning_rate["discrete"]
-            self.search_steps = search_steps["discrete"]
+        if isinstance(learning_rate, float):
+            self.learning_rate = learning_rate
         else:
-            self.learning_rate = learning_rate["continuous"]
-            self.search_steps = search_steps["continuous"]
-            
+            if task.is_discrete:
+                self.learning_rate = learning_rate["discrete"]
+            else:
+                self.learning_rate = learning_rate["continuous"]
+        
+        if isinstance(search_steps, int):
+            self.search_steps = search_steps
+        else:
+            if task.is_discrete:
+                self.search_steps = search_steps["discrete"]
+            else:
+                self.search_steps = search_steps["continuous"]
+        
         self.scale_lr = scale_lr    
         
          

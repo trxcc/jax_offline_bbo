@@ -31,13 +31,21 @@ class ReinforceSearcher(Searcher):
         super().__init__(key, score_fn, datamodule, task, num_solutions)
         self.exploration_std = exploration_std
         self.iterations = iterations 
-        
-        if task.is_discrete:
-            self.learning_rate = learning_rate["discrete"]
-            self.batch_size = batch_size["discrete"]
+        if isinstance(learning_rate, float):
+            self.learning_rate = learning_rate
         else:
-            self.learning_rate = learning_rate["continuous"]
-            self.batch_size = batch_size["continuous"]
+            if task.is_discrete:
+                self.learning_rate = learning_rate["discrete"]
+            else:
+                self.learning_rate = learning_rate["continuous"]
+        
+        if isinstance(batch_size, int):
+            self.batch_size = batch_size
+        else:
+            if task.is_discrete:
+                self.batch_size = batch_size["discrete"]
+            else:
+                self.batch_size = batch_size["continuous"]
 
     def run(self) -> jnp.ndarray:
         x = jnp.array(self.task.x_np)

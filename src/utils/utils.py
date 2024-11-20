@@ -4,7 +4,6 @@ import jax
 import jax.numpy as jnp
 import random 
 import torch 
-import tensorflow as tf 
 import numpy as np 
 from omegaconf import DictConfig
 from importlib.util import find_spec
@@ -16,10 +15,14 @@ log = RankedLogger(__name__, rank_zero_only=True)
 
 def seed_everything(seed: int) -> KeyArray:
     random.seed(seed)
-    tf.random.set_seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     rng = jax.random.PRNGKey(seed)
+    try:
+        import tensorflow as tf
+        tf.random.set_seed(seed)
+    except:
+        pass
     return rng
 
 def train_val_split(

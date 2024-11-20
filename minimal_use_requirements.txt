@@ -1,0 +1,8 @@
+jax[cuda12]
+optax
+flax
+botorch==0.10.0
+cma
+google-vizier[jax]==0.0.20
+wandb
+hydra-core

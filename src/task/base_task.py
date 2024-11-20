@@ -1,11 +1,9 @@
 from typing import Callable, Dict, Sequence, Union, Tuple, Optional
 
 import abc
-import design_bench as db 
 import numpy as np 
 import jax.numpy as jnp 
 
-from design_bench.task import Task
 from vizier import pyvizier as vz 
 from vizier.benchmarks import Experimenter
 
@@ -18,9 +16,9 @@ class OfflineBBOExperimenter(Experimenter):
             Union[np.ndarray, jnp.ndarray]],
         x_np: np.ndarray,
         y_np: np.ndarray,
-        full_y_min: Union[float, np.ndarray],
-        full_y_max: Union[float, np.ndarray],
         is_discrete: bool,
+        full_y_min: Optional[Union[float, np.ndarray]] = None,
+        full_y_max: Optional[Union[float, np.ndarray]] = None,
         x_ood_np: Optional[np.ndarray] = None,
         y_ood_np: Optional[np.ndarray] = None,
         require_to_logits: bool = True,
@@ -143,11 +141,16 @@ class OfflineBBOExperimenter(Experimenter):
     
     def evaluate(self, suggestions: Sequence[vz.Trial]) -> None:
         x_batch = self.trial2array(suggestions)
-        self.score = self.eval_fn(x_batch)
-        self.normalized_score = (self.score - self.full_y_min) / (self.full_y_max - self.full_y_min)
-        for suggestion, score_i, nml_score_i in zip(suggestions, self.score, self.normalized_score):
-            measurement = vz.Measurement(metrics={"Score": score_i, "Normalized_Score": nml_score_i})
-            suggestion.complete(measurement)
+        self.scoring = self.eval_fn(x_batch).squeeze()
+        if self.full_y_min is not None and self.full_y_max is not None:
+            self.normalized_score = (self.scoring - self.full_y_min) / (self.full_y_max - self.full_y_min)
+            for suggestion, score_i, nml_score_i in zip(suggestions, self.scoring, self.normalized_score):
+                measurement = vz.Measurement(metrics={"Score": score_i, "Normalized_Score": nml_score_i})
+                suggestion.complete(measurement)
+        else:
+            for suggestion, score_i in zip(suggestions, self.scoring):
+                measurement = vz.Measurement(metrics={"Score": score_i})
+                suggestion.complete(measurement)
     
     @abc.abstractmethod
     def problem_statement(self) -> vz.ProblemStatement:
@@ -161,14 +164,17 @@ class OfflineBBOExperimenter(Experimenter):
         
         for trial in trials:
             score.append(trial.final_measurement.metrics["Score"].value)
-            normalized_score.append(trial.final_measurement.metrics["Normalized_Score"].value)
+            if self.full_y_min is not None and self.full_y_max is not None:
+                normalized_score.append(trial.final_measurement.metrics["Normalized_Score"].value)
         
         score = np.array(score)
-        normalized_score = np.array(normalized_score)
+        if self.full_y_min is not None and self.full_y_max is not None:
+            normalized_score = np.array(normalized_score)
         
         return {
             "Score": score,
-            "Normalized_Score": normalized_score,
+            "Normalized_Score": normalized_score if self.full_y_min is not None and self.full_y_max is not None \
+                else None,
         }
         
     
